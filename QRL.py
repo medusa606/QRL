@@ -780,7 +780,7 @@ def randomMove(simTime, nA, agentState, pLog, rLog, nExp, AV_y):
 
 
 # Agent walks along pavement and randomly choose to cross the road
-def randomBehaviour(simTime, nA, agentState, pLog, rLog, nExp, AV_y, diag=True):
+def randomBehaviour(simTime, nA, agentState, XR_WD_status,pLog, rLog, nExp, AV_y, diag=True):
 	
 	for agentID in range(0,nA):
 		walk_direction = 0
@@ -795,6 +795,8 @@ def randomBehaviour(simTime, nA, agentState, pLog, rLog, nExp, AV_y, diag=True):
 
 		#if first step then set agents down pavement
 		if int(simTime)==1:
+			XR_WD_status[agentID,0] = 0
+			XR_WD_status[agentID,1] = 0
 			# if old_ay>int(round(gridH/2)): #walking direction
 			if ran>1 or ran<7:
 				walk_direction = -1
@@ -808,6 +810,9 @@ def randomBehaviour(simTime, nA, agentState, pLog, rLog, nExp, AV_y, diag=True):
 				if old_ax<2: crossing_road = 1 #if on upper pavement, move down
 			else:
 				crossing_road = 0
+			XR_WD_status[agentID,1] = walk_direction
+			XR_WD_status[agentID,0] = crossing_road
+
 			#print("old_xy=%2i,%2i xy=%2i,%2i n=%3i t=%2i WD=%2i XR=%2i" % (old_ax, old_ay, 0, 0, nExp, simTime,walk_direction,crossing_road))
 
 
@@ -842,6 +847,8 @@ def randomBehaviour(simTime, nA, agentState, pLog, rLog, nExp, AV_y, diag=True):
 				if old_ax<2:
 					crossing_road = 1 #if on upper pavement, move down
 					if diag:print("Agent has decided to cross DOWN")
+			XR_WD_status[agentID,1] = walk_direction
+			XR_WD_status[agentID,0] = crossing_road
 
 
 		# Move the agent based on the walk and crossing direction
@@ -1231,9 +1238,6 @@ def Election(simTime, nA, agentState, XR_WD_status, pLog, rLog, nExp, AV_y, CP=T
 					no_best_candidate = np.shape(best_candidate)
 					# print("no_best_candidate =" , no_best_candidate)
 
-
-						
-
 					if(diag):raw_input("Press Enter to continue...")
 			else:
 				best_candidate = -1
@@ -1491,6 +1495,78 @@ def initLocation(nA, nTests):
 
 
 
+def updatefeatures(simTime, agentState, XR_WD_status, AV_y, diag=False):
+		
+	nA = np.ma.size(agentState,1)
+	print("nA from ma.size = %d" % nA)
+	
+	for agentID in range(0,nA):
+		#shorthand - pedestrian position
+		xp = int(agentState[simTime,agentID,0])
+		yp = int(agentState[simTime,agentID,1])
+		
+		#av position
+		xa = np.array([2,3,4,5])
+		ya = AV_y
+
+		# f1 = is agent on road
+		if (xp > 1) | (xp < 10):
+			on_road = 1
+			raw_input("Press Enter to continue...")
+		if (xp <= 1) | (xp >= 10):
+			on_road = 0
+		
+		# delta XY to AV
+		diff_x = xa - xp
+		dy = ya - yp
+		abs_diff_x = abs(diff_x)
+		min_abs_diff_x = np.min(abs(diff_x))
+		dx = diff_x[np.argwhere(min_abs_diff_x==abs_diff_x)]
+		dx = dx[0]
+		dx = dx[0]
+		# print("delta XY ",dx, dy)
+
+		# find euclidean distance
+		euclid = np.sqrt(np.square(dy) + np.square(dx))
+		#print("euclid ",euclid)
+
+		
+		# find if AV is heading towards you (needs history)
+		XR = XR_WD_status[agentID,0]  # x-dir
+		WD = XR_WD_status[agentID,1] # y-dir
+
+
+		# f3, f4, f5 = inverse distance to AV
+		if euclid == 0:
+			inv_euclid = 1
+			inv_euclid2 = 1
+			inv_euclid3 = 1
+		else:
+			inv_euclid = 10/euclid
+			inv_euclid2 = 100/np.square(euclid)
+			inv_euclid3 = 1000/np.power(euclid,3)
+
+		if diag:
+			print("~~~~ percepts ~~~~")
+			print("xp yp ",xp, yp)
+			print("xa ya ",xa, ya)
+			print("on road=\t%d"%on_road)
+			print("delta y=\t%d "% dy)
+			print("delta x=\t%d "% dx)
+			print("XR=\t\t%d"% XR)
+			print("WD=\t\t%d" % WD)
+			print("euclid=\t\t%.2f" % euclid)
+			print("inv_euclid=\t%.2f" % inv_euclid)
+			print("inv_euclid2=\t%.2f " % inv_euclid2)
+			print("inv_euclid3=\t%.2f " % inv_euclid3)
+			print("~~~~~~~~~~~~~~")
+
+	features =  [on_road, dx, dy, euclid, inv_euclid, inv_euclid2, inv_euclid3]
+	return features
+
+
+
+
 # ======================================================================
 # --- User Experiment Params -----------------------------------------
 
@@ -1499,15 +1575,15 @@ gridH, gridW = 12, 66			# Each grid unit is 1.5m square
 pavement_rows = [0,1,10,11] 	#grid row of each pavement
 vAV = 6 						# 6u/s ~9.1m/s ~20mph
 vPed = 1 						# 1u/s ~1.4m/s ~3mph
-nA = 10							# Number of agents
+nA = 1							# Number of agents
 delay = 0.35 					# delay between each frame, slows sim down
 vt = 100						# points for a valid test
 AV_y = 0						# AV start position along road
 default_reward	= -1 			# Living cost
 road_pen = -5					# Penalty for being in road
 
-display_grid = False			# Show the grid
-diag = False					# What level of CL diagnostics to show
+display_grid = True 			# Show the grid
+diag = True					# What level of CL diagnostics to show
 loopAgentList = True 			# use nAlist to loop through nA
 
 # Choose the type of agent behaviour
@@ -1517,7 +1593,7 @@ loopAgentList = True 			# use nAlist to loop through nA
 #	Election = elects a single agent within range to cross road
 
 agentChoices = ['RandAction', 'RandBehaviour','Proximity','Election']
-agentBehaviour = agentChoices[3] 	# TODO replace with CL arg
+agentBehaviour = agentChoices[1] 	# TODO replace with CL arg
 TR = 15 							# Proximity/Election Trigger Radius
 ECA = True							# If election is held, choose closest to AV, else furthest
 CP = True 							# Elect agents on pavement closest to the AV
@@ -1648,15 +1724,19 @@ for nA in nAList:
 		#print("simTime=", simTime)
 		simTime = simTime + 1
 
+		
 		# move agents	
 		if agentBehaviour == 'RandAction':
 			randomMove(simTime, nA, agentState, pLog, rLog, nExp, AV_y)
 		if agentBehaviour == 'RandBehaviour':
-			randomBehaviour(simTime, nA, agentState, pLog, rLog, nExp, AV_y, diag=diag)
+			randomBehaviour(simTime, nA, agentState, XR_WD_status,pLog, rLog, nExp, AV_y, diag=diag)
 		if agentBehaviour == 'Proximity':
 			Proximity(simTime, nA, agentState, pLog, rLog, nExp, AV_y, trigger_radius=TR, diag=diag)
 		if agentBehaviour == 'Election':
 			Election(simTime, nA, agentState, XR_WD_status, pLog, rLog, nExp, AV_y, CP=CP, ECA=ECA, trigger_radius=TR, diag=diag)
+
+		# update the state features for the agents
+		features = updatefeatures(simTime, agentState, XR_WD_status, AV_y, diag)
 
 
 		# render the scene
