@@ -1524,6 +1524,14 @@ def getActionSpace(simTime,nA,agentState,XR_WD_status, AV_y, diag):
 		#print("actionSpace", actionSpace)
 	return actionSpace
 
+
+
+def featuresOfFutureActions(futureActions):
+
+	return futureFeatures
+
+
+
 # reset environment 
 def resetEnv(simTime,nExp,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog):
 	test_gen_time[nExp] = simTime
@@ -1737,11 +1745,12 @@ for nA in nAList:
 				futureActions[agentID,2]=0
 			if curr_y == gridW-1:
 				futureActions[agentID,3]=0
-		print("futureActions")
-		print(futureActions)
-		raw_input("Press Enter to continue...")
+		# print("futureActions")
+		# print(futureActions)
+		# raw_input("Press Enter to continue...")
 
 		# update features on all possible actionSpace
+		futureFeatures = featuresOfFutureActions(futureActions)
 		
 
 		# calculate q-values for all state action pairs
