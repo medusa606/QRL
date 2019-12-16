@@ -1426,16 +1426,99 @@ def initLocation(nA, nTests):
 	return startLocations
 
 
+def getActionSpace(simTime,nA,agentState,XR_WD_status, AV_y, diag):
 
-def updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA,nF, diag=False):	
+	# store possible actions for each agent: UP(-x), DOWN(+x), L(-y), R(+y), NONE
+	actionSpace = np.zeros(shape=(nA,5))
+	futureStates = np.zeros(shape=(nA,5,2))
+	if(diag):print("###getActionSpace agentState", agentState[simTime-1,:,:])
+
+	for agentID in range(0,nA):
+		count = 0
+		xp = int(agentState[simTime-1,agentID,0])
+		yp = int(agentState[simTime-1,agentID,1])
+		XR = XR_WD_status[agentID,0]
+		WD = XR_WD_status[agentID,1]
+
+		# #if agent is XR then keep this as only option
+		# if simTime>1:
+		# 	if XR != 0:
+		# 		if XR == -1: #UP
+		# 			actionSpace[agentID, 0] = 1
+		# 			futureStates[agentID,0,:] = xp-1, yp				
+		# 		if XR == 1: #DOWN
+		# 			actionSpace[agentID, 1] = 1
+		# 			futureStates[agentID,1,:] = xp+1, yp
+		# 	elif XR==0:
+		# 		if WD == -1: #LEFT
+		# 			actionSpace[agentID, 2] = 1
+		# 			futureStates[agentID,2,:] = xp, yp-1
+		# 		if WD == 1: #RIGHT
+		# 			actionSpace[agentID, 3] = 1
+		# 			futureStates[agentID,3,:] = xp, yp+1
+		# 	else: #NO ACTION
+		# 		actionSpace[agentID, 4] = 1
+		# 		futureStates[4,:] = xp, yp
+
+		if simTime>=1: #if this is the first move then find valid moves
+			# print("getActionSpace first move t=%d" % simTime)
+			# print("###getActionSpace middle futureStates", futureStates.reshape(-1, 2))
+			xp = int(agentState[0,agentID,0])
+			yp = int(agentState[0,agentID,1])
+			actionSpace[agentID, :] = 1 #set all to valid and check if valid
+			for sID in range(0, 5):
+				if sID==0:
+					new_x, new_y = xp-1, yp
+				if sID==1:
+					new_x, new_y = xp+1, yp
+				if sID==2:
+					new_x, new_y = xp, yp-1
+				if sID==3:
+					new_x, new_y = xp, yp+1
+				if sID==4:
+					new_x, new_y = xp, yp
+
+				if (new_y == 0) or (new_y > gridW-1):
+					actionSpace[agentID, sID] = 0
+					new_x, new_y = -1, -1
+				if (new_x == 0) or (new_x > gridH-1):
+					actionSpace[agentID, sID] = 0
+					new_x, new_y = -1, -1
+				futureStates[agentID,sID,:] = new_x, new_y
+				#print("###getActionSpace bottom sID",sID," futureStates", futureStates.reshape(-1, 2))
+	
+	# print("actionSpace", actionSpace)
+	# print("futureStates", futureStates.reshape(-1, 2))
+	# raw_input("Press Enter to continue...")
+
+	return actionSpace, futureStates
+
+
+def updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA, nF, future=False, diag=False):	
 	import numpy as np	
-	nA = np.ma.size(agentState,1)
+	if future:
+		nA = nA * 5
+	else:
+		nA = np.ma.size(agentState,1)
 	features = np.zeros(shape=(nA, nF))
+	print("updatefeatures for nA=%d future=%d" % (nA,future))	
 
 	for agentID in range(0,nA):
 		#shorthand - pedestrian position
-		xp = int(agentState[simTime-1,agentID,0])
-		yp = int(agentState[simTime-1,agentID,1])
+		if not(future):
+			xp = int(agentState[simTime-1,agentID,0])
+			yp = int(agentState[simTime-1,agentID,1])
+		else:
+			if(diag):print("future extrapolation...")
+			xp = int(agentState.reshape(-1, 2)[agentID,0])
+			yp = int(agentState.reshape(-1, 2)[agentID,1])
+			if xp==-1 or yp==-1:
+				if(diag):print("action invalid, skipping...")
+				features[agentID,:] =  [0]*nF
+				continue # next ID
+
+
+		print("###updatefeatures for x=%d, y=%d" % (xp, yp))
 		
 		#av position
 		xa = np.array([2,3,4,5])
@@ -1460,8 +1543,12 @@ def updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA,nF, diag=False):
 		euclid = np.sqrt(np.square(dy) + np.square(dx))
 		
 		# find if AV is heading towards you (needs history)
-		XR = XR_WD_status[agentID,0]  # x-dir
-		WD = XR_WD_status[agentID,1]  # y-dir
+		# TODO
+
+		# see what actions are active
+		if not(future):
+			XR = XR_WD_status[agentID,0]  # x-dir
+			WD = XR_WD_status[agentID,1]  # y-dir
 
 		# inverse distance to AV
 		if euclid == 0:
@@ -1474,6 +1561,8 @@ def updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA,nF, diag=False):
 			inv_euclid3 = 1000/np.power(euclid,3)
 
 		features[agentID,:] =  on_road, dx, dy, euclid, inv_euclid, inv_euclid2, inv_euclid3
+		if(diag):print("features ",features[agentID,:])
+		# raw_input("Press Enter to continue...")
 
 		# if diag:
 		# 	print("~~~~ percepts ~~~~")
@@ -1494,41 +1583,65 @@ def updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA,nF, diag=False):
 	return features, tags
 
 
+def featuresOfFutureActions(simTime,nA, XR_WD_status, AV_y, nF, agentState, futureStates, future=True):	
 
+	f,t = updatefeatures(simTime, futureStates, XR_WD_status, AV_y, nA, nF, future=True)
 
+	#print("###featuresOfFutureActions", f)
+	# raw_input("Press Enter to continue...")
+	return f
 
-def getActionSpace(simTime,nA,agentState,XR_WD_status, AV_y, diag):
-
-	# store possible actions for each agent: UP(-x), DOWN(+x), L(-y), R(+y), NONE
-	actionSpace = np.zeros(shape=(nA,5))
-
+def qValForFutureFeats(nA,nF, futureFeatures,AV_y,feat_weights):
+	qval = np.zeros(shape=(nA*5))
+	counter=0
+	# calculate Q-values based on the feature representation
+	# Q(s,a) = w1.f1(s,a) + w2.f2(s,a) + ... wi.fi(s,a)
 	for agentID in range(0,nA):
-		xp = int(agentState[simTime,agentID,0])
-		yp = int(agentState[simTime,agentID,1])
-		XR = XR_WD_status[agentID,0]
-		WD = XR_WD_status[agentID,1]
+		for fidx in range(0, 5):
+			
+			w = feat_weights[agentID,:]
+			f =  futureFeatures[fidx,:]
+			temp = np.sum(np.multiply(w,f))
+			print("ID=%d fidx=%d" %(agentID, fidx))
+			print("weights", w)
+			print("feats", f)
+			print("temp", temp)
+			qval[counter] = temp
+			counter = counter +1
 
-		#if agent is XR then keep this as only option
-		if XR != 0:
-			if XR == -1:
-				actionSpace[agentID, 0] = 1
-			if XR == 1:
-				actionSpace[agentID, 1] = 1
-		elif XR==0:
-			if WD == -1:
-				actionSpace[agentID, 2] = 1
-			if WD == 1:
-				actionSpace[agentID, 3] = 1
-		else:
-			actionSpace[agentID, 4] = 1
-		#print("actionSpace", actionSpace)
-	return actionSpace
+		# argMAX for best q-value per agent
 
+		# index of highest q-value is best action
+
+	print("qValForFutureFeats qval=", qval)
+	raw_input("Press Enter to continue...")
+	return qval
 
 
-def featuresOfFutureActions(futureActions):
 
-	return futureFeatures
+def qUpdate():
+	
+	# update the feature weights given the reward
+	difference = (reward + self.alpha * q_val_dash) - qval
+	
+	# print("features x weights ", np.multiply(self.feat_weights, features))
+	# print("#############################")
+	# print("reward ", reward)
+	# print("self.discount ", self.discount)
+	# print("next_state ", next_state)
+	# print("next_state_possible_actions ", list(next_state_possible_actions))
+	# print("qval ", qval)
+	# print("q_val_dash ", q_val_dash)
+	# print("self.feat_weights", self.feat_weights)
+	# print("difference", difference)
+	# print("self.feat_weights.shape", self.feat_weights.shape)
+
+	for i in range(self.feat_weights.shape[0]):
+		wi = self.feat_weights[i]
+		self.feat_weights[i] = wi + self.alpha * difference * features[i]
+
+
+
 
 
 
@@ -1642,12 +1755,17 @@ for nA in nAList:
 	# a state-action space array will hold the q-values for each agent
 	stateAction = np.zeros(shape=(nA, nF, 5)) #fixed to 5 basic moves
 
+
 	# ======================================================================
 	# --- MDP Agent Experiment Params --------------------------------------
 
 	alpha = 0.04
 	epsilon = 0.2
 	discount = 0.99
+
+	#'on_road', 'dx', 'dy', 'euc', 'i_euc', 'i_euc2', 'i_euc3'
+	feat_weights = np.array([[-1,-1,-1,-1,1,1,1],]*nF)
+
 
 	# ======================================================================
 	# --- Logs -------------------------------------------------------------
@@ -1724,12 +1842,12 @@ for nA in nAList:
 		simTime = simTime + 1
 
 		# update the state features for the agents
-		features, tags = updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA, nF, diag)
+		features, tags = updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA, nF, False, diag)
 		# print("features")
 		# print(features)
 
 		# get possible action space
-		currentActionSpace = getActionSpace(simTime,nA,agentState,XR_WD_status, AV_y, diag=diag)
+		currentActionSpace, futureStates = getActionSpace(simTime,nA,agentState,XR_WD_status, AV_y, diag=diag)
 
 		# get possible future-action space
 		# futureActions = getFutureActionSpace(currentActionSpace,agentState,nA,simTime)
@@ -1750,12 +1868,12 @@ for nA in nAList:
 		# raw_input("Press Enter to continue...")
 
 		# update features on all possible actionSpace
-		futureFeatures = featuresOfFutureActions(futureActions)
-		
+		futureFeatures = featuresOfFutureActions(simTime,nA, XR_WD_status, AV_y, nF, agentState, futureStates, future=True)	
+		# print("futureFeatures", futureFeatures)
 
 		# calculate q-values for all state action pairs
-
 		# find the best q-values of all available
+		q_vals_future = qValForFutureFeats(nA,nF, futureFeatures, AV_y, feat_weights)
 
 		# return the action for the highest q-value
 
