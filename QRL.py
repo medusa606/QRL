@@ -1,8 +1,3 @@
-# cd git/QRL
-# conda activate my_env
-# python QRL.py
-
-
 import sys
 import numpy as np
 import cv2
@@ -65,9 +60,9 @@ class Environment(object):
 
 		self.frame = np.zeros((self.gridH * self.scale, self.gridW * self.scale, 3), np.uint8)	
 		
-		for position in self.blocked_positions:			
-			y, x = position			
-			cv2.rectangle(self.frame, (x*self.scale, y*self.scale), ((x+1)*self.scale, (y+1)*self.scale), (100, 100, 100), -1)
+		# for position in self.blocked_positions:			
+		# 	y, x = position			
+		# 	cv2.rectangle(self.frame, (x*self.scale, y*self.scale), ((x+1)*self.scale, (y+1)*self.scale), (100, 100, 100), -1)
 		
 		for position, reward in zip(self.road_positions, self.road_rewards):
 			text = str(int(reward))
@@ -77,8 +72,8 @@ class Environment(object):
 			font = cv2.FONT_HERSHEY_SIMPLEX
 			y, x = position		
 			(w, h), _ = cv2.getTextSize(text, font, 1, 2)
-			cv2.rectangle(self.frame, (x*self.scale, y*self.scale), ((x+1)*self.scale, (y+1)*self.scale), (100, 100, 100), -1) #from blocked positions
-			cv2.putText(self.frame, text, (int((x+0.5)*self.scale-w/2), int((y+0.5)*self.scale+h/2)), font, 1, color, 2, cv2.LINE_AA)	
+			# cv2.rectangle(self.frame, (x*self.scale, y*self.scale), ((x+1)*self.scale, (y+1)*self.scale), (100, 100, 100), -1) #from blocked positions
+			# cv2.putText(self.frame, text, (int((x+0.5)*self.scale-w/2), int((y+0.5)*self.scale+h/2)), font, 1, color, 2, cv2.LINE_AA)	
 
 		for position, reward in zip(self.end_positions, self.end_rewards):
 			text = str(int(reward))
@@ -91,7 +86,13 @@ class Environment(object):
 			cv2.putText(self.frame, text, (int((x+0.5)*self.scale-w/2), int((y+0.5)*self.scale+h/2)), font, 1, color, 2, cv2.LINE_AA)	
 			#cv2.putText(self.frame, text, (int((x+0.5)*self.scale)-w/2, int((y+0.5)*self.scale+h/2)), font, 1, color, 2, cv2.LINE_AA)
 			
-            
+        # colour the pavements
+		pavement_rows = [0,1,10,11]
+		for y in pavement_rows:
+			for x in range(self.gridW+1):
+				cv2.rectangle(self.frame, (x*self.scale, y*self.scale), ((x+1)*self.scale, (y+1)*self.scale), (100, 100, 100), -1)
+
+
 
 	def init_start_state(self):
 		
@@ -112,10 +113,10 @@ class Environment(object):
 		#clear the board of previous blocked positions
 		self.frame = np.zeros((self.gridH * self.scale, self.gridW * self.scale, 3), np.uint8)	
 
-		#update blocked positions
-		for position in self.blocked_positions:			
-			y, x = position			
-			cv2.rectangle(self.frame, (x*self.scale, y*self.scale), ((x+1)*self.scale, (y+1)*self.scale), (100, 100, 100), -1)
+		# #update blocked positions
+		# for position in self.blocked_positions:			
+		# 	y, x = position			
+		# 	cv2.rectangle(self.frame, (x*self.scale, y*self.scale), ((x+1)*self.scale, (y+1)*self.scale), (100, 100, 100), -1)
 
 		# update the road rewards
 		for position, reward in zip(self.road_positions, self.road_rewards):
@@ -127,7 +128,7 @@ class Environment(object):
 			y, x = position		
 			(w, h), _ = cv2.getTextSize(text, font, 1, 2)
 			#cv2.rectangle(self.frame, (x*self.scale, y*self.scale), ((x+1)*self.scale, (y+1)*self.scale), (100, 100, 100), -1) #from blocked positions
-			cv2.putText(self.frame, text, (int((x+0.5)*self.scale-w/2), int((y+0.5)*self.scale+h/2)), font, 0.5, color, 1, cv2.LINE_AA)	
+			#cv2.putText(self.frame, text, (int((x+0.5)*self.scale-w/2), int((y+0.5)*self.scale+h/2)), font, 0.5, color, 1, cv2.LINE_AA)	
 
 		#GC update the position of the AV and rewards
 		for position, reward in zip(self.end_positions, self.end_rewards):
@@ -140,7 +141,15 @@ class Environment(object):
 			font = cv2.FONT_HERSHEY_SIMPLEX
 			y, x = position		
 			(w, h), _ = cv2.getTextSize(text, font, 1, 2)
-			cv2.putText(self.frame, text, (int((x+0.5)*self.scale-w/2), int((y+0.5)*self.scale+h/2)), font, 0.5, color, 1, cv2.LINE_AA)
+			cv2.rectangle(self.frame, (x*self.scale, y*self.scale), ((x+1)*self.scale, (y+1)*self.scale), (100, 100, 100), -1) #from blocked positions
+			# cv2.putText(self.frame, text, (int((x+0.5)*self.scale-w/2), int((y+0.5)*self.scale+h/2)), font, 0.5, color, 1, cv2.LINE_AA)
+
+		# colour the pavements
+		pavement_rows = [0,1,10,11]
+		for y in pavement_rows:
+			for x in range(self.gridW+1):
+				cv2.rectangle(self.frame, (x*self.scale, y*self.scale), ((x+1)*self.scale, (y+1)*self.scale), (100, 100, 100), -1)
+			
 
 	def percepts(self, AV_state):
 		
@@ -1682,7 +1691,7 @@ road_pen = -5					# Penalty for being in road
 nF = 7							# number of features per agent
 
 display_grid  = True 			# Show the grid
-diag 		  = True			# What level of CL diagnostics to show
+diag 		  = False			# What level of CL diagnostics to show
 loopAgentList = False 			# use nAlist to loop through nA
 plotFeatures  = True 			# plot features
 
@@ -1909,7 +1918,7 @@ for nA in nAList:
 				img = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8,	sep='')
 				img  = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 				img = cv2.cvtColor(img,cv2.COLOR_RGB2BGR)
-				cv2.imshow("plot",img)
+				cv2.imshow("plot",	img)
 
 
 		# render the scene
