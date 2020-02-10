@@ -1601,25 +1601,29 @@ def qValForFutureFeats(nA,nF, futureFeatures,AV_y,feat_weights):
 	# calculate Q-values based on the feature representation
 	# Q(s,a) = w1.f1(s,a) + w2.f2(s,a) + ... wi.fi(s,a)
 	for agentID in range(0,nA):
-		for fidx in range(0, 5):
-			
+		for fidx in range(0, 5):			
 			w = feat_weights[agentID,:]
 			f =  futureFeatures[fidx,:]
-			temp = np.sum(np.multiply(w,f))
-			# print("ID=%d fidx=%d" %(agentID, fidx))
-			# print("weights", w)
-			# print("feats", f)
+			product = np.multiply(w,f)
+			temp = np.sum(product)
+			print("ID=%d fidx=%d" %(agentID, fidx))
+			print("weights", w)
+			print("feats", f)
+			print("product", product)
+			print("temp", temp)
 			# print("temp", temp)
 			# qval[counter] = temp
 			qval[agentID,fidx] = temp
 			counter = counter +1
 
 		# argMAX for index of best q-value
+		print("chosen action index is",np.argmax(qval[agentID,:]))
 		q_argmax[agentID] = np.argmax(qval[agentID,:])
 		
 		# index of highest q-value is best action
 		# print("qval[agentID,:]", qval[agentID,:])
 		# print("q_argmax", q_argmax[agentID])
+	print("q_argmax", q_argmax)
 
 	# raw_input("Press Enter to continue...")
 	return qval, q_argmax
@@ -1636,7 +1640,7 @@ def updateWeights(features,q_vals_future,q_argmax,feat_weights,reward,alpha,curr
 	# ================================================
 	# update feature weights
 	#
-	# difference = (reward + alpha * q_val_dash) - qval
+	# difference = (reward + discount * q_val_dash) - qval
 	# new_weight(i) = old_weight(i) + alpha * difference * feature(i)
 	# ================================================
 	# print("q_argmax.shape",q_argmax.shape)
@@ -1646,17 +1650,26 @@ def updateWeights(features,q_vals_future,q_argmax,feat_weights,reward,alpha,curr
 	for agentID in range(0, nA):
 		q_val_dash = q_vals_future[agentID, (int)(q_argmax[agentID])]			
 		for wi in range(0, numFeat):
-			old_weight = feat_weights[agentID,wi]
+			old_weight = (float)(feat_weights[agentID,wi])
 			difference = (reward[agentID] + discount * q_val_dash) - current_qval[agentID] 
-			feat_weights[agentID,wi] = old_weight + alpha * difference * features[agentID,wi]
-			# print("wi", wi)
-			# print("old_weight", old_weight)
-			# print("reward[agentID]", reward[agentID])
-			# print("discount", discount)
-			# print("q_val_dash", q_val_dash)
-			# print("current_qval[agentID]", current_qval[agentID])
-			# print("difference", difference)
-			# print("features[agentID,wi]", features[agentID,wi])
+			new_weight = (float)(old_weight + alpha * difference * features[agentID,wi])
+			feat_weights[agentID,wi] = new_weight
+			print("********************************")
+			print("***      Weight Update       ***")
+			print("********************************")						
+			print("agent = ", agentID)
+			print("weight index = ", wi)
+			print("reward[agentID]", reward[agentID])
+			print("discount", discount)
+			print("current_qval", current_qval[agentID])
+			print("q_val_dash", q_val_dash)
+			print("difference", difference)
+			print("***************")
+			print("old_weight", old_weight)
+			print("alpha", alpha)
+			print("difference", difference)
+			print("feature", features[agentID,wi])
+			print("new weight", new_weight)
 
 def resetEnv(simTime,nExp,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog):
 	# reset environment 
@@ -1677,6 +1690,63 @@ def resetEnv(simTime,nExp,test_gen_time,done,running_score,exclusions,AV_y,displ
 	randomStart(startLocations,simTime,nA,agentState,rsLog,pLog,nExp) 
 	return simTime,nExp,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog
 
+def plot_Features(fig,features,counter,y):
+	x = np.arange(len(features[0,:]))
+	if counter==1: 
+		y=features
+		counter=counter+1
+	else: 
+		temp = np.transpose(features[0,:])
+		y = np.vstack((y,temp))
+		counter=counter+1
+	if counter>2:				
+		plt.plot(y, label=tags)
+		plt.plot(y, label=['on_road', 'dx', 'dy', 'euc', 'i_euc', 'i_euc2', 'i_euc3', 'score'])
+		plt.title('Agent Features') 
+		fig.canvas.draw()
+		img = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8,	sep='')
+		img = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+		img = cv2.cvtColor(img,cv2.COLOR_RGB2BGR)
+		cv2.imshow("Features",	img)
+		# key = cv2.waitKey(10)
+		# if key == 27: sys.exit()
+	return counter, y
+
+def plot_Weights(Wfig,feat_weights,Wcounter):
+	x = np.arange(len(feat_weights[0,:]))
+	if Wcounter==1: 
+		y=feat_weights
+		Wcounter=Wcounter+1
+	else: 
+		temp = np.transpose(feat_weights[0,:])
+		y = np.vstack((y,temp))
+		Wcounter=Wcounter+1
+	if Wcounter>2:				
+		plt.plot(y, label=tags)
+		plt.title('Weights') 
+		Wfig.canvas.draw()
+		Wimg = np.fromstring(Wfig.canvas.tostring_rgb(), dtype=np.uint8,	sep='')
+		Wimg = Wimg.reshape(Wfig.canvas.get_width_height()[::-1] + (3,))
+		Wimg = cv2.cvtColor(Wimg,cv2.COLOR_RGB2BGR)
+		cv2.imshow("Weights",	Wimg)
+
+def plot_Qvalues(Qfig,current_qval,Qcounter):				
+	x = np.shape(current_qval)
+	if Qcounter==1: 
+		y=current_qval
+		Qcounter=Qcounter+1
+	else: 
+		temp = current_qval#np.transpose(current_qval[0,:])
+		y = np.vstack((y,temp))
+		Qcounter=Qcounter+1
+	if Qcounter>2:				
+		plt.plot(y, label=tags)
+		plt.title('Q-values') 
+		Qfig.canvas.draw()
+		Qimg = np.fromstring(Qfig.canvas.tostring_rgb(), dtype=np.uint8,	sep='')
+		Qimg = Qimg.reshape(Qfig.canvas.get_width_height()[::-1] + (3,))
+		Qimg = cv2.cvtColor(Qimg,cv2.COLOR_RGB2BGR)
+		cv2.imshow("Q-Values",	Qimg)
 
 # ======================================================================
 # --- User Experiment Params -----------------------------------------
@@ -1786,7 +1856,7 @@ for nA in nAList:
 	discount = 0.95 #future discount
 
 	#'on_road', 'dx', 'dy', 'euc', 'i_euc', 'i_euc2', 'i_euc3'
-	feat_weights = np.array([[-1,-1,-1,-1,1,1,1],]*nA)
+	feat_weights = np.array([[-1.,-1.,-1.,-1.,1.,1.,1.],]*nA)
 	# feat_weights = np.array([[-1,1],]*nA)
 	print("feat_weights", feat_weights)
 
@@ -1906,12 +1976,16 @@ for nA in nAList:
 
 		# update features on all possible actionSpace
 		futureFeatures = featuresOfFutureActions(simTime,nA, XR_WD_status, AV_y, nF, agentState, futureStates, future=True)	
-		# print("futureFeatures", futureFeatures)
+		print("futureFeatures", futureFeatures)
 
 		# calculate q-values for all state action pairs
 		# find the best q-values of all available, q_argmax is the best action index
 		q_vals_future, q_argmax = qValForFutureFeats(nA,nF, futureFeatures, AV_y, feat_weights)
-		# print("q_vals_future", q_vals_future)
+		print("q_vals_future", q_vals_future)
+		
+
+
+
 
 		# move agent based on best features
 		for agentID in range(0, nA):
@@ -1957,10 +2031,9 @@ for nA in nAList:
 
 		# reward = checkReward(nA, simTime, agentState, agentScores, nExp, roadPenaltyMaxtrix) #Check reward and end positions (overrules env.step)
 
-
-		
-
-		if plotFeatures:				
+	
+		# plot data if requested
+		if plotFeatures:
 			x = np.arange(len(features[0,:]))
 			if counter==1: 
 				y=features
@@ -1978,8 +2051,7 @@ for nA in nAList:
 				img = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 				img = cv2.cvtColor(img,cv2.COLOR_RGB2BGR)
 				cv2.imshow("Features",	img)
-
-		if plotWeights:				
+		if plotWeights:
 			x = np.arange(len(feat_weights[0,:]))
 			if Wcounter==1: 
 				y=feat_weights
@@ -1996,11 +2068,9 @@ for nA in nAList:
 				Wimg = Wimg.reshape(Wfig.canvas.get_width_height()[::-1] + (3,))
 				Wimg = cv2.cvtColor(Wimg,cv2.COLOR_RGB2BGR)
 				cv2.imshow("Weights",	Wimg)
-
-		if plotQvalues:				
+		if plotQvalues:
 			x = np.shape(current_qval)
 			if Qcounter==1: 
-				# y=features
 				y=current_qval
 				Qcounter=Qcounter+1
 			else: 
@@ -2015,15 +2085,10 @@ for nA in nAList:
 				Qimg = Qimg.reshape(Qfig.canvas.get_width_height()[::-1] + (3,))
 				Qimg = cv2.cvtColor(Qimg,cv2.COLOR_RGB2BGR)
 				cv2.imshow("Q-Values",	Qimg)
-
 		
 		if display_grid:
-			# env.render(agent.qvalues, running_score, simTime, nA, agentState)
 			MASrender(simTime, nA, agentState, validTests)
-		# next_state_possible_actions = env.get_possible_actions()
-		# agent.feat_q_update(state, AV_state, action, reward, next_state, next_state_possible_actions, done, features, q_val_dash)
-		# state = next_state
-		time.sleep(delay)
+			time.sleep(delay)
 
 		
 		
@@ -2077,8 +2142,10 @@ for nA in nAList:
 				
 				# if valid test generated then read agent scores and update weights with bonus score
 				reward = agentScores[nExp,:]
+				print("Reward (test found) =%d" % reward)
 				# update weights based on reward
 				updateWeights(features,q_vals_future,q_argmax,feat_weights,reward,alpha,current_qval)
+				print("OUTSIDE feat_weights",feat_weights)
 				running_score = running_score + reward[0]
 
 				#log the scores for this run
@@ -2111,8 +2178,10 @@ for nA in nAList:
 
 		# no valid test generated then update scores
 		if done==False:
-			reward = checkReward(nA, simTime, agentState, agentScores, nExp, roadPenaltyMaxtrix) #Check reward and end positions (overrules env.step)
+			reward = checkReward(nA, simTime, agentState, agentScores, nExp, roadPenaltyMaxtrix) #Check reward and end positions 
+			print("Reward (no test) =%d" % reward)
 			updateWeights(features,q_vals_future,q_argmax,feat_weights,reward,alpha,current_qval)
+			print("OUTSIDE feat_weights",feat_weights)
 			# store features and score
 			for agentID in range(0, nA):
 				featID = list(features[agentID,:])
@@ -2128,7 +2197,7 @@ for nA in nAList:
 		# move the IF=DONE here with env restet functions
 
 			
-		# raw_input("Press Enter to continue...")
+		raw_input("Press Enter to continue...")
 
 
 	# close log files
