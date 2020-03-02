@@ -1,6 +1,7 @@
 # from __future__ import division	
 import sys
 import numpy as np
+import numpy.ma as ma #for mask arrays
 import cv2
 import time
 import matplotlib.pyplot as plt
@@ -1269,11 +1270,11 @@ def detectAction(crossing_road, walk_direction,simTime,agentID, diag=False):
 
 def checkEdge(gridW, gridH, old_ax, old_ay, new_x, new_y, diag=False):	
 	dx, dy = 0,0
-	if (new_y == 0) or (new_y > gridW-1):
+	if (new_y == 0) or (new_y >= gridW):
 		dy = dy * -1
 		if diag:print("Agent at y-limit reversing")
 		new_y = int(old_ay + dy)
-	if (new_x == 0) or (new_x > gridH-1):
+	if (new_x == 0) or (new_x >= gridH):
 		dx = dx * -1
 		new_x = int(old_ax + dx)
 		if diag:print("Agent at x-limit reversing")
@@ -1440,26 +1441,6 @@ def getActionSpace(simTime,nA,agentState,XR_WD_status, AV_y, diag):
 		XR = XR_WD_status[agentID,0]
 		WD = XR_WD_status[agentID,1]
 
-		# #if agent is XR then keep this as only option
-		# if simTime>1:
-		# 	if XR != 0:
-		# 		if XR == -1: #UP
-		# 			actionSpace[agentID, 0] = 1
-		# 			futureStates[agentID,0,:] = xp-1, yp				
-		# 		if XR == 1: #DOWN
-		# 			actionSpace[agentID, 1] = 1
-		# 			futureStates[agentID,1,:] = xp+1, yp
-		# 	elif XR==0:
-		# 		if WD == -1: #LEFT
-		# 			actionSpace[agentID, 2] = 1
-		# 			futureStates[agentID,2,:] = xp, yp-1
-		# 		if WD == 1: #RIGHT
-		# 			actionSpace[agentID, 3] = 1
-		# 			futureStates[agentID,3,:] = xp, yp+1
-		# 	else: #NO ACTION
-		# 		actionSpace[agentID, 4] = 1
-		# 		futureStates[4,:] = xp, yp
-
 		if simTime>=1: #if this is the first move then find valid moves
 			# print("getActionSpace first move t=%d" % simTime)
 			# print("###getActionSpace middle futureStates", futureStates.reshape(-1, 2))
@@ -1478,19 +1459,16 @@ def getActionSpace(simTime,nA,agentState,XR_WD_status, AV_y, diag):
 				if sID==4:
 					new_x, new_y = xp, yp
 
-				if (new_y == 0) or (new_y > gridW-1):
+				if (new_y < 0) or (new_y > gridW-1):
 					actionSpace[agentID, sID] = 0
 					new_x, new_y = -1, -1
-				if (new_x == 0) or (new_x > gridH-1):
+				if (new_x < 0) or (new_x > gridH-1):
 					actionSpace[agentID, sID] = 0
 					new_x, new_y = -1, -1
 				futureStates[agentID,sID,:] = new_x, new_y
-				#print("###getActionSpace bottom sID",sID," futureStates", futureStates.reshape(-1, 2))
+				# if(diag):print('###getActionSpace### actionSpace',actionSpace)
+				# if(diag):print('###getActionSpace### futureStates',futureStates)
 	
-	# print("actionSpace", actionSpace)
-	# print("futureStates", futureStates.reshape(-1, 2))
-	# raw_input("Press Enter to continue...")
-
 	return actionSpace, futureStates
 
 def updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA, nF, gridW, gridH, future=False, diag=False):	
@@ -1517,8 +1495,6 @@ def updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA, nF, gridW, gridH
 				features[agentID,:] =  [0]*nF
 				continue # next ID
 
-		#print("###updatefeatures for x=%d, y=%d" % (xp, yp))
-		
 		#av position
 		xa = np.array([2,3,4,5])
 		ya = AV_y
@@ -1539,18 +1515,24 @@ def updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA, nF, gridW, gridH
 		dx = dx[0]
 		dx = dx[0]
 		dx = dx / float(gridH)  #normalise to grid world
-		
 
 		# find euclidean distance
 		euclid = np.sqrt(np.square(dy) + np.square(dx))
 		
-		# find if AV is heading towards you (needs history)
-		# TODO
-
 		# see what actions are active
 		if not(future):
 			XR = XR_WD_status[agentID,0]  # x-dir
 			WD = XR_WD_status[agentID,1]  # y-dir
+
+		# get inverse dx and dy
+		if dx == 0:
+			inv_dx=1
+		else:
+			inv_dx=(1/dx)/10
+		if dy == 0:
+			inv_dy=1
+		else:
+			inv_dy=(1/dy)/10
 
 		# inverse distance to AV
 		if euclid == 0:
@@ -1558,15 +1540,48 @@ def updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA, nF, gridW, gridH
 			inv_euclid2 = 1
 			inv_euclid3 = 1
 		else:
-			inv_euclid = euclid
-			inv_euclid2 = np.square(euclid)
-			inv_euclid3 = np.power(euclid,3)
+			inv_euclid  = (1/euclid)/10
+			inv_euclid2 = (1/np.square(euclid))/1000
+			inv_euclid3 = (1/np.power(euclid,3))/1000000
 
-		features[agentID,:] =  on_road, dx, dy, euclid, inv_euclid, inv_euclid2, inv_euclid3
-		# features[agentID,:] =  on_road, inv_euclid
-		if(diag):print("features ",features[agentID,:])
-		# raw_input("Press Enter to continue...")
+		# AV towards me indicator
+		if dy < 0:
+			toward = 1
+		else:
+			toward = 0
 
+		# AV on opposite road
+		if dx > 3:
+			AV_opp = 1
+		else:
+			AV_opp = 0
+
+		# AV within radius 15
+		if euclid < (15 / float(gridH)):
+			trigger = 1
+		else:
+			trigger = 0
+
+
+		# features[agentID,:] =  dx, dy, euclid
+		# features[agentID,:] =  dx, dy, euclid, inv_euclid      
+		# features[agentID,:] =  dx, dy, euclid, inv_euclid, inv_euclid2 
+		# features[agentID,:] =  dx, dy, euclid, inv_euclid, inv_euclid2, AV_opp 
+		# features[agentID,:] =  dx, dy, euclid, inv_euclid, inv_euclid2, inv_euclid3
+		# features[agentID,:] =  dx, dy, euclid, inv_euclid, inv_euclid2, inv_euclid3, toward
+		# features[agentID,:] =  on_road, dx, dy, euclid, inv_euclid, inv_euclid2, inv_euclid3
+		# features[agentID,:] =  dx, dy, euclid, inv_dx, inv_dy, inv_euclid
+		# features[agentID,:] =  dx, dy, euclid, inv_euclid, toward
+		# features[agentID,:] =  dx, dy, euclid, inv_euclid, toward, on_road
+		
+		features[agentID,:] =  dx, dy, euclid,inv_euclid,toward
+		# features[agentID,:] =  dx, dy, euclid,inv_euclid,toward, trigger
+		# features[agentID,:] =  dx, dy, euclid,inv_euclid,toward,AV_opp
+		# features[agentID,:] =  dx, dy, euclid,inv_euclid,on_road
+		# features[agentID,:] =  dx, dy, euclid,inv_euclid,toward,on_road
+		# features[agentID,:] =  dx, dy, euclid, inv_euclid, inv_euclid2, inv_euclid3,toward,on_road
+		
+		if(diag):print("###updatefeatures### features ",features[agentID,:])
 		if diag:
 			print("~~~~ percepts ~~~~")
 			print("xp yp ",xp, yp)
@@ -1581,49 +1596,78 @@ def updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA, nF, gridW, gridH
 			print("inv_euclid2=\t%.2f " % inv_euclid2)
 			print("inv_euclid3=\t%.2f " % inv_euclid3)
 			print("~~~~~~~~~~~~~~")
-	tags = ('on_road', 'dx', 'dy', 'euc', 'i_euc', 'i_euc2', 'i_euc3') 		
 	
+	# tags = ('dx', 'dy', 'euc') 		
+	# tags = ('dx', 'dy', 'euc','i_euc/10') 
+	# tags = ('dx', 'dy', 'euc', 'i_euc/10','i_euc2/10^3') 		
+	# tags = ('dx', 'dy', 'euc', 'i_euc/10','i_euc2/10^3', 'AV_opp') 		
+	# tags = ('dx', 'dy', 'euc', 'i_euc/10', 'i_euc2/10^3', 'i_euc3/10^6') 		
+	# tags = ('dx', 'dy', 'euc', 'i_euc/10', 'i_euc2/10^3', 'i_euc3/10^6','toward') 		
+			
+	# tags = ('dx', 'dy', 'euc', 'inv_dx/10', 'inv_dy/10','i_euc/10') 
+	tags = ('dx', 'dy', 'euc', 'i_euc/10','toward') 
+	# tags = ('dx', 'dy', 'euc', 'i_euc/10','toward','trigger') 
+	# tags = ('dx', 'dy', 'euc', 'i_euc/10','toward','AV_opp') 
+	# tags = ('dx', 'dy', 'euc', 'i_euc/10','toward','on_road') 
+	# tags = ('dx', 'dy', 'euc','i_euc/10','toward') 
+	# tags = ('dx', 'dy', 'euc','i_euc/10','on_road') 
+	# tags = ('dx', 'dy', 'euc','i_euc/10','toward','on_road') 
+	# tags = ('dx', 'dy', 'euc', 'i_euc/10', 'i_euc2/10^3', 'i_euc3/10^6','toward','on_road') 		
+		
+
+
 	return features, tags
 
 def featuresOfFutureActions(simTime,nA, XR_WD_status, AV_y, nF, agentState, futureStates, future=True):	
 
+	# if(diag): print('###featuresOfFutureActions### futureStates',futureStates)
 	f,t = updatefeatures(simTime, futureStates, XR_WD_status, AV_y, nA, nF, gridW, gridH, future=True)
-	#print("###featuresOfFutureActions", f)
+	# print("###featuresOfFutureActions", f)
 	# raw_input("Press Enter to continue...")
 	return f
 
-def qValForFutureFeats(nA,nF, futureFeatures,AV_y,feat_weights):
+def qValForFutureFeats(nA,nF, futureFeatures,futureActions,AV_y,feat_weights):
 	# qval = np.zeros(shape=(nA*5))
 	qval = np.zeros(shape=(nA,5))
 	q_argmax = np.zeros(shape=nA) 		#index of best action
-
+	# mask = np.logical_not(np.array(futureActions,dtype=bool)) #boolean mask to indicate which values NOT to use
+	# print('###qValForFutureFeats### mask',mask)
+	# raw_input()
 	counter=0
 	# calculate Q-values based on the feature representation
 	# Q(s,a) = w1.f1(s,a) + w2.f2(s,a) + ... wi.fi(s,a)
 	for agentID in range(0,nA):
 		for fidx in range(0, 5):			
 			w = feat_weights[agentID,:]
-			f =  futureFeatures[fidx,:]
+			f = futureFeatures[fidx,:]
+			valid_actions = futureActions[agentID,:] #logic of valid actions
+			mask = np.logical_not(np.array(futureActions[agentID,:],dtype=bool)) #boolean mask to indicate which values NOT to use
+			valid_actions = ma.masked_array(futureActions[agentID,:],mask)
 			product = np.multiply(w,f)
 			temp = np.sum(product)
-			print("ID=%d fidx=%d" %(agentID, fidx))
-			print("weights", w)
-			print("feats", f)
-			print("product", product)
-			print("temp", temp)
+			# print("ID=%d fidx=%d" %(agentID, fidx))
+			# print("weights", w)
+			# print("feats", f)
+			# print("product", product)
 			# print("temp", temp)
-			# qval[counter] = temp
+			# print("temp", temp)
 			qval[agentID,fidx] = temp
 			counter = counter +1
 
 		# argMAX for index of best q-value
-		print("chosen action index is",np.argmax(qval[agentID,:]))
-		q_argmax[agentID] = np.argmax(qval[agentID,:])
+		# print("chosen action index is",np.argmax(qval[agentID,:]))
+		# use the valid actions to prune all possible actions
+		all_qvals = qval[agentID,:]
+		pruned_actions = np.multiply(all_qvals,valid_actions)
+		q_argmax[agentID] = np.argmax(pruned_actions)
+		# print("all_qvals",all_qvals)
+		# print("valid_actions",valid_actions)
+		# print("pruned_actions",pruned_actions)
 		
 		# index of highest q-value is best action
 		# print("qval[agentID,:]", qval[agentID,:])
 		# print("q_argmax", q_argmax[agentID])
-	print("q_argmax", q_argmax)
+	# print("q_argmax", q_argmax)
 
 	# raw_input("Press Enter to continue...")
 	return qval, q_argmax
@@ -1654,28 +1698,30 @@ def updateWeights(features,q_vals_future,q_argmax,feat_weights,reward,alpha,curr
 			difference = (reward[agentID] + discount * q_val_dash) - current_qval[agentID] 
 			new_weight = (float)(old_weight + alpha * difference * features[agentID,wi])
 			feat_weights[agentID,wi] = new_weight
-			print("********************************")
-			print("***      Weight Update       ***")
-			print("********************************")						
-			print("agent = ", agentID)
-			print("weight index = ", wi)
-			print("reward[agentID]", reward[agentID])
-			print("discount", discount)
-			print("current_qval", current_qval[agentID])
-			print("q_val_dash", q_val_dash)
-			print("difference", difference)
-			print("***************")
-			print("old_weight", old_weight)
-			print("alpha", alpha)
-			print("difference", difference)
-			print("feature", features[agentID,wi])
-			print("new weight", new_weight)
+			# print("********************************")
+			# print("***      Weight Update       ***")
+			# print("********************************")						
+			# print("agent = ", agentID)
+			# print("weight index = ", wi)
+			# print("reward[agentID]", reward[agentID])
+			# print("discount", discount)
+			# print("current_qval", current_qval[agentID])
+			# print("q_val_dash", q_val_dash)
+			# print("difference", difference)
+			# print("***************")
+			# print("old_weight", old_weight)
+			# print("alpha", alpha)
+			# print("difference", difference)
+			# print("feature", features[agentID,wi])
+			# print("new weight", new_weight)
 
-def resetEnv(simTime,nExp,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog):
+def resetEnv(simTime,nExp,nTests,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog):
 	# reset environment 
 	test_gen_time[nExp] = simTime
-	nExp = nExp + 1
+	# nExp = nExp + 1
+	# if (nExp>nTests-1):
 	random.seed(nExp)
+	np.random.seed(nExp)
 	env.reset_state()
 	done = False 
 	running_score = 0
@@ -1751,25 +1797,31 @@ def plot_Qvalues(Qfig,current_qval,Qcounter):
 # ======================================================================
 # --- User Experiment Params -----------------------------------------
 
-nTests = 1000						# Number of experiements to run
+nTests = 1000					# Number of experiements to run
 gridH, gridW = 12, 66			# Each grid unit is 1.5m square
 pavement_rows = [0,1,10,11] 	# grid row of each pavement
 vAV = 6 						# 6u/s ~9.1m/s ~20mph
 vPed = 1 						# 1u/s ~1.4m/s ~3mph
-nA = 1							# Number of agents
-delay = 0.15 					# delay between each frame, slows sim down
+nA = 3							# Number of agents
+delay = 0.01 					# delay between each frame, slows sim down
 vt = 1000						# points for a valid test
 AV_y = 0						# AV start position along road
-default_reward	= 0 			# Living cost
+default_reward= -1 				# Living cost
 road_pen = -5					# Penalty for being in road
-nF = 7							# number of features per agent
+nF = 5							# number of features per agent
 
-display_grid  = True 			# Show the grid
-diag 		  = True			# What level of CL diagnostics to show
+
+display_grid  = False 			# Show the grid
+display_chart = True 			# Show plotted data
+diag 		  = False			# What level of CL diagnostics to show
 loopAgentList = False 			# use nAlist to loop through nA
+
 plotFeatures  = False 			# plot features
 plotWeights   = True			# plot feature weights
 plotQvalues   = False 			# plot q-values chart
+plotAccuracy  = False 			# plot the accuracy averaged over nExp
+SaveCharts    = True 			# save the plots produced
+display_chart_modulo = 50
 
 # Choose the type of agent behaviour
 # 	RandAction	= take random actions
@@ -1783,6 +1835,12 @@ TR = 15 							# Proximity/Election Trigger Radius
 ECA = True							# If election is held, choose closest to AV, else furthest
 CP = True 							# Elect agents on pavement closest to the AV
 
+# Q-Learning Feature Set
+FeatSet = 1						# Choose which features agent should use
+
+alpha = 0.002 #learning rate
+epsilon = 0.16 #search policy
+discount = 0.99 #future discount
 # ======================================================================
 # --- Non-User Experiment Params ---------------------------------------
 
@@ -1803,6 +1861,10 @@ if plotQvalues:
 	Qfig = plt.figure()
 	Qcounter=1
 
+if plotAccuracy:
+	Afig = plt.figure()
+	Acounter=1
+
 # ======================================================================
 # --- Loop through Specified Number of Agents --------------------------
 for nA in nAList:
@@ -1816,7 +1878,7 @@ for nA in nAList:
 	roadPenaltyMaxtrix[:,pavement_rows] = default_reward
 
 	road_positions = [(i,j) for j in range(0,gridW) for i in [2,3,4,5,6,7,8,9]] 
-	road_rewards 	= [road_pen for i in range(4*gridH)] 
+	road_rewards   = [road_pen for i in range(4*gridH)] 
 
 	AV_y = 0
 	AV_x = [2,3,4,5]
@@ -1847,18 +1909,38 @@ for nA in nAList:
 	# a state-action space array will hold the q-values for each agent
 	stateAction = np.zeros(shape=(nA, nF, 5)) #fixed to 5 basic moves
 
+	# initialise experiment number and random seed
+	nExp = 0 #experiment counter
+	random.seed(nExp) #set the random seed based on the experiment number
+	np.random.seed(nExp)
+
 
 	# ======================================================================
 	# --- MDP Agent Experiment Params --------------------------------------
 
-	alpha = 0.004 #learning rate
-	epsilon = 0.2 #search policy
-	discount = 0.95 #future discount
+	# alpha = 0.004 #learning rate
+	# epsilon = 0.02 #search policy
+	# discount = 0.95 #future discount
 
 	#'on_road', 'dx', 'dy', 'euc', 'i_euc', 'i_euc2', 'i_euc3'
 	feat_weights = np.array([[-1.,-1.,-1.,-1.,1.,1.,1.],]*nA)
-	# feat_weights = np.array([[-1,1],]*nA)
-	print("feat_weights", feat_weights)
+	feat_weights = np.array([np.random.rand(nF),]*nA)
+	if(diag): print("feat_weights", feat_weights)
+
+	# ======================================================================
+	# use existing weights
+	# for dx, dy, euc, i_euc/10 ACC=63.8 Tests=200
+	# feat_weights = np.array([[-4.11146701,  -5.48638104,  12.4593254,  156.18604846],]*nA)
+
+	# for dx, dy, euc, i_euc/10, i_euc2/1000 ACC=70.1 Tests=1000
+	# feat_weights = np.array([[0.5488135 , 0.71518937, 0.60276338, 0.54488318, 0.4236548 ],]*nA)
+	
+	# features[agentID,:] =  dx, dy, euclid,inv_euclid,toward
+	# feat_weights = np.array([[ 12.76206632, -40.65811894 , 28.23486239,  81.07528645, -59.54039597],]*nA)
+	# feat_weights = np.array([[ 	10.88713081 ,-49.97721555  ,33.15796263,  66.68952519, -63.46238057],]*nA)
+
+
+
 
 
 	# ======================================================================
@@ -1883,16 +1965,17 @@ for nA in nAList:
 	fLog = open("logs/feature_log_%s.txt" % ts, "w")
 	fLog.write("nExp, Time,   ID"+"".join(',       F%2i' % i for i in range(0,nF)) + " \n")
 	
-
+	aExTime = 0 	# Store the time to execute agent actions
 	# ======================================================================
 	# --- Initialisation ---------------------------------------------------
 
 	running_score = 0
 	simTime = 0
-	nExp = 0 #experiment counter
-	random.seed(nExp) #set the random seed based on the experiment number
+
 	if diag: print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
 	if diag: print("Running %d %s agents for %d tests..." % (nA, agentBehaviour,nTests))
+	# print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+	# print("Running %d %s agents for %d tests..." % (nA, agentBehaviour,nTests))
 
 	# Generate a list of start points for the agents so they are the same across behaviours
 	startLocations = initLocation(nA, nTests)
@@ -1900,31 +1983,26 @@ for nA in nAList:
 
 	# Use the position list to set agent states 
 	randomStart(startLocations,simTime,nA,agentState,rsLog,pLog,nExp) 
-	#print("agent state after init pos", agentState)
+	if(diag):print("Agent state after randomStart", agentState)
 
-	# Initialist the environment class and make an initial render of the board
+	# Initialise the environment class and make an initial render of the board
 	env = Environment(gridH, gridW, end_positions, end_rewards, blocked_positions, start_pos, default_reward, road_positions, road_rewards)
-
-	# action_space = env.action_space
-	# state_space = env.state_space
-	# agent = FeatAgent(alpha, epsilon, discount, action_space, state_space)
 
 	# Display the grid lines, q-values, agent positions
 	if display_grid:
 		MASrender(simTime, nA, agentState, validTests)
-		#env.render(agent.qvalues, running_score, simTime, nA, agentState)
 	time.sleep(delay)
-	# state = env.get_state()
-
-
-
-
 
 	# Flag to indicate if a valid test has been generated
 	done = False
 
+
 	# while(nExp <= nTests):
 	while(not(done)) and (nExp <= nTests-1):
+
+		if(diag):print("===========================")
+		if(diag):print("Experiment=%d Time=%d" % (nExp,simTime))
+		if(diag):print("===========================")
 
 		#check if series complete
 		if(nExp>nTests):
@@ -1934,6 +2012,8 @@ for nA in nAList:
 		if simTime==0 and diag: print("Experiment Number", nExp)
 		#print("simTime=", simTime)
 		simTime = simTime + 1
+
+		start = time.time()
 
 		# update the state features for the agents
 		features, tags = updatefeatures(simTime, agentState, XR_WD_status, AV_y, nA, nF, gridW, gridH, False, diag)
@@ -1951,70 +2031,79 @@ for nA in nAList:
 			# print("f",f)
 			# print("product",product)
 			# print("current_qval",current_qval)
+		
+		old_ax = agentState[simTime-1,agentID,0]
+		old_ay = agentState[simTime-1,agentID,1]
+		if(diag):print("old_ax",old_ax)
+		if(diag):print("old_ay",old_ay)
 
 
 		# get possible action space 1-step ahead
-		currentActionSpace, futureStates = getActionSpace(simTime,nA,agentState,XR_WD_status, AV_y, diag=diag)
-
-		# get possible future-action space
-		# futureActions = getFutureActionSpace(currentActionSpace,agentState,nA,simTime)
-		futureActions = np.ones(shape=(nA,5))
-		for agentID in range(0,nA):
-			curr_x = agentState[simTime-1,agentID,0]
-			curr_y = agentState[simTime-1,agentID,1]
-			if curr_x == 0:
-				futureActions[agentID,0]=0
-			if curr_x == gridH-1:
-				futureActions[agentID,1]=0
-			if curr_y == 0:
-				futureActions[agentID,2]=0
-			if curr_y == gridW-1:
-				futureActions[agentID,3]=0
-		# print("futureActions")
-		# print(futureActions)
-		# raw_input("Press Enter to continue...")
+		futureActions, futureStates = getActionSpace(simTime,nA,agentState,XR_WD_status, AV_y, diag=diag)
+		if(diag):print("###MAIN### futureStates",futureStates)
 
 		# update features on all possible actionSpace
 		futureFeatures = featuresOfFutureActions(simTime,nA, XR_WD_status, AV_y, nF, agentState, futureStates, future=True)	
-		print("futureFeatures", futureFeatures)
+		if(diag):print("futureFeatures", futureFeatures)
 
 		# calculate q-values for all state action pairs
 		# find the best q-values of all available, q_argmax is the best action index
-		q_vals_future, q_argmax = qValForFutureFeats(nA,nF, futureFeatures, AV_y, feat_weights)
-		print("q_vals_future", q_vals_future)
+		q_vals_future, q_argmax = qValForFutureFeats(nA,nF, futureFeatures, futureActions, AV_y, feat_weights)
+		if(diag):print("q_vals_future", q_vals_future)
+		if(diag):print("q_argmax",  q_argmax)
 		
-
-
-
 
 		# move agent based on best features
 		for agentID in range(0, nA):
 			
-			# get action from best q-learn value
-			action = q_argmax[agentID]
+			# implement epsilon search policy
+			if epsilon > np.random.uniform(0.0, 1.0):
+				if(diag):print("Agent %d taking random action" % agentID)
+				agent_valid_choices = np.nonzero(futureActions[agentID,:])
+				slen = np.shape(agent_valid_choices)[1]
+				agent_valid_choices = np.reshape(agent_valid_choices,(slen,))
+				epsilon_choice = np.random.choice(agent_valid_choices)
+				action = (int)(epsilon_choice)					
+				if(diag): print("agent_valid_choices shape",np.shape(agent_valid_choices))
+				if(diag): print("agent_valid_choices",agent_valid_choices)
+				if(diag): print("agent_valid_choices shape",np.shape(agent_valid_choices))
+				if(diag): print("epsilon_choice",epsilon_choice)
+				# raw_input()
+			else:
+				# get action from best q-learn value
+				action = q_argmax[agentID]
+
 			old_ax = agentState[simTime-1,agentID,0]
 			old_ay = agentState[simTime-1,agentID,1]
+			if(diag):print("action",action)
+			# print("old_ax",old_ax)
+			# print("old_ay",old_ay)
 			
 			# For valid (edge of board) but unconstrained movement (any direction at any time) use:
-			if action == 1:
-				dx = 0
-				dy = 0
-			if action == 0:
+			if action == 0: #UP
 				dx = -1
 				dy = 0
-			if action == 2:
+			if action == 1: #DOWN
 				dx = 1
 				dy = 0
-			if action == 3:
+			if action == 2: #LEFT
 				dx = 0
 				dy = -1
-			if action == 3:
+			if action == 3: #RIGHT
 				dx = 0
 				dy = 1
+			if action == 4: #DO NOTHING
+				dx = 0
+				dy = 0
 			new_x = int(old_ax + dx)
 			new_y = int(old_ay + dy)
 			new_x, new_y = checkEdge(gridW, gridH, old_ax, old_ay, new_x, new_y, diag)
 			agentState[simTime,agentID,:] = new_x, new_y	
+			if(diag):print("new_x",new_x)
+			if(diag):print("new_y",new_y)	
+			if(diag) and (new_x<0):	raw_input("ERROR: Invalid location")
+			if(diag) and (new_y<0):	raw_input("ERROR: Invalid location")
+			# if(diag):raw_input()
 	
 		# move agents	
 		if agentBehaviour == 'RandAction':
@@ -2030,7 +2119,8 @@ for nA in nAList:
 		
 
 		# reward = checkReward(nA, simTime, agentState, agentScores, nExp, roadPenaltyMaxtrix) #Check reward and end positions (overrules env.step)
-
+		end = time.time()
+		aExTime = aExTime + (end - start)
 	
 		# plot data if requested
 		if plotFeatures:
@@ -2050,7 +2140,9 @@ for nA in nAList:
 				img = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8,	sep='')
 				img = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 				img = cv2.cvtColor(img,cv2.COLOR_RGB2BGR)
-				cv2.imshow("Features",	img)
+				if(display_chart):cv2.imshow("Features",	img)
+				key = cv2.waitKey(1)
+				if key == 27: sys.exit()
 		if plotWeights:
 			x = np.arange(len(feat_weights[0,:]))
 			if Wcounter==1: 
@@ -2060,21 +2152,23 @@ for nA in nAList:
 				temp = np.transpose(feat_weights[0,:])
 				y = np.vstack((y,temp))
 				Wcounter=Wcounter+1
-			if Wcounter>2:				
+			if (Wcounter>2) and ((nExp>nTests-2) or (nExp%display_chart_modulo==0)):							
 				plt.plot(y, label=tags)
 				plt.title('Weights') 
 				Wfig.canvas.draw()
 				Wimg = np.fromstring(Wfig.canvas.tostring_rgb(), dtype=np.uint8,	sep='')
 				Wimg = Wimg.reshape(Wfig.canvas.get_width_height()[::-1] + (3,))
 				Wimg = cv2.cvtColor(Wimg,cv2.COLOR_RGB2BGR)
-				cv2.imshow("Weights",	Wimg)
+				if(display_chart):cv2.imshow("Weights",	Wimg)
+				key = cv2.waitKey(1)
+				if key == 27: sys.exit()
 		if plotQvalues:
 			x = np.shape(current_qval)
 			if Qcounter==1: 
 				y=current_qval
 				Qcounter=Qcounter+1
 			else: 
-				temp = current_qval#np.transpose(current_qval[0,:])
+				temp = current_qval
 				y = np.vstack((y,temp))
 				Qcounter=Qcounter+1
 			if Qcounter>2:				
@@ -2084,14 +2178,44 @@ for nA in nAList:
 				Qimg = np.fromstring(Qfig.canvas.tostring_rgb(), dtype=np.uint8,	sep='')
 				Qimg = Qimg.reshape(Qfig.canvas.get_width_height()[::-1] + (3,))
 				Qimg = cv2.cvtColor(Qimg,cv2.COLOR_RGB2BGR)
-				cv2.imshow("Q-Values",	Qimg)
-		
+				if(display_chart):cv2.imshow("Q-Values",	Qimg)
+				key = cv2.waitKey(1)
+				if key == 27: sys.exit()
+		if plotAccuracy:
+			if validTests==0:
+				acc = 0
+			else:
+				acc = 100*(validTests/nExp)			
+			if Acounter==1: 
+				acc_ratio_arr = acc
+				Acounter=Acounter+1
+			else: 							
+				acc_ratio_arr = np.vstack((acc_ratio_arr,acc))
+				Acounter=Acounter+1
+			if (Acounter>2) and ((nExp>nTests-2) or (nExp%display_chart_modulo==0)):
+				plt.plot(acc_ratio_arr, label='$T_s$',color='black')
+				plt.ylabel('Accuracy (%)') 
+				plt.xlabel(r'simulation ticks ($t_s$)')
+				plt.title(r'$ \epsilon={0:.2f}$ ACC={1:.1f} {{}}'.format(epsilon,acc).format(tags))				
+				plt.grid(True)
+				plt.ylim((0,100))
+				Afig.canvas.draw()
+				Aimg = np.fromstring(Afig.canvas.tostring_rgb(), dtype=np.uint8,	sep='')
+				Aimg = Aimg.reshape(Afig.canvas.get_width_height()[::-1] + (3,))
+				Aimg = cv2.cvtColor(Aimg,cv2.COLOR_RGB2BGR)
+			
+				if(display_chart):cv2.imshow("Accuracy",	Aimg)
+				# cv2.moveWindow('frame', 50, 50)
+				key = cv2.waitKey(1)
+				if key == 27: sys.exit()
+
+				if (nExp == nTests-1):	
+					plt.savefig('Accuracy_%s.png' % ts)
+
+		# render the scene
 		if display_grid:
 			MASrender(simTime, nA, agentState, validTests)
-			time.sleep(delay)
-
-		
-		
+			time.sleep(delay)		
 
 	# move AV
 		for i in range(0,vAV):
@@ -2142,10 +2266,10 @@ for nA in nAList:
 				
 				# if valid test generated then read agent scores and update weights with bonus score
 				reward = agentScores[nExp,:]
-				print("Reward (test found) =%d" % reward)
+				if diag:print("Reward (test found) =", reward)
 				# update weights based on reward
 				updateWeights(features,q_vals_future,q_argmax,feat_weights,reward,alpha,current_qval)
-				print("OUTSIDE feat_weights",feat_weights)
+				# if diag:print("OUTSIDE feat_weights",feat_weights)
 				running_score = running_score + reward[0]
 
 				#log the scores for this run
@@ -2157,7 +2281,11 @@ for nA in nAList:
 				vLog.write(rsindex + log_string + "\n")
 				valid_test_scores=np.append(valid_test_scores,avg_scoresRound)
 				#resetEnv
-				simTime,nExp,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog = resetEnv(simTime,nExp,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog)
+				nExp = nExp + 1
+				if (nExp>nTests-1):
+					break
+				else:
+					simTime,nExp,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog = resetEnv(simTime,nExp,nTests,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog)
 				continue
 
 			# Reset the game if the AV reaches the end
@@ -2169,7 +2297,11 @@ for nA in nAList:
 				rsindex = "%4i,%6i" % (nExp,0)
 				sLog.write(rsindex + log_string + "\n")	
 				#resetEnv
-				simTime,nExp,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog = resetEnv(simTime,nExp,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog)												 
+				nExp = nExp + 1
+				if (nExp>nTests-1):
+					break
+				else:
+					simTime,nExp,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog = resetEnv(simTime,nExp,nTests,test_gen_time,done,running_score,exclusions,AV_y,display_grid,nA,agentState,gridW,startLocations,rsLog,pLog)
 				#print("after reset simTime is %d" % simTime)
 				continue
 
@@ -2177,28 +2309,21 @@ for nA in nAList:
 			
 
 		# no valid test generated then update scores
-		if done==False:
-			reward = checkReward(nA, simTime, agentState, agentScores, nExp, roadPenaltyMaxtrix) #Check reward and end positions 
-			print("Reward (no test) =%d" % reward)
-			updateWeights(features,q_vals_future,q_argmax,feat_weights,reward,alpha,current_qval)
-			print("OUTSIDE feat_weights",feat_weights)
-			# store features and score
-			for agentID in range(0, nA):
-				featID = list(features[agentID,:])
-				#print("featID",featID)
-				log_string = "".join(', %9.3f' % i for i in featID) + "".join(",  %4i" % reward[agentID])
-				index = "%4i, %4i, %4i" % (nExp, simTime, agentID)
-				fLog.write(index + log_string + "\n")
-
-
-		# update feature weights based on REWARD
-
-
-		# move the IF=DONE here with env restet functions
-
-			
-		raw_input("Press Enter to continue...")
-
+		if (nExp>nTests-1):
+			break
+		else:
+			if done==False:
+				reward = checkReward(nA, simTime, agentState, agentScores, nExp, roadPenaltyMaxtrix) #Check reward and end positions 
+				if diag:print("Reward (no test) =", reward)
+				updateWeights(features,q_vals_future,q_argmax,feat_weights,reward,alpha,current_qval)
+				if diag:print("OUTSIDE weights",feat_weights)
+				# store features and score
+				for agentID in range(0, nA):
+					featID = list(features[agentID,:])
+					#print("featID",featID)
+					log_string = "".join(', %9.3f' % i for i in featID) + "".join(",  %4i" % reward[agentID])
+					index = "%4i, %4i, %4i" % (nExp, simTime, agentID)
+					fLog.write(index + log_string + "\n")
 
 	# close log files
 	if diag: print("Test complete, writing log files...")
@@ -2243,6 +2368,13 @@ for nA in nAList:
 	v_ci95_hig = np.mean(v_ci95Arr[:,1])
 	# print("ci95 low %.2f high %.2f" % (ci95_low, ci95_hig))
 	
+	#stats on time
+	mean_tgt = np.mean(test_gen_time)
+	tgt_ci = st.t.interval(0.95, len(test_gen_time)-1, loc=np.mean(test_gen_time), scale=st.sem(test_gen_time))
+	tgt_ci95 = (zip(*tgt_ci))
+	tgt_ci95Arr = np.asarray(tgt_ci95)
+	tgt_ci95_low = np.mean(tgt_ci95Arr[:,0])
+	tgt_ci95_hig = np.mean(tgt_ci95Arr[:,1])
 
 
 	# generate report
@@ -2276,6 +2408,10 @@ for nA in nAList:
 	summary.write("Average ci95 over all agents is:\n")
 	summary.write("%.2f %.2f\n" % (v_ci95_low, v_ci95_hig))
 	summary.write("======================================= \n")
+	summary.write("Q-Agent Features\n")
+	summary.write("".join('%s, ' % x for x in tags))
+	summary.write("\n")
+	summary.write("".join('{:s},'.format(i) for i in feat_weights))
 	summary.close()
 
 	tgt = np.mean(test_gen_time)
@@ -2289,14 +2425,23 @@ for nA in nAList:
 		print("Average agent score: %.2f" 			% agScore_AVG)
 		print("ci95_low %.2f" 						% (ci95_low))
 		print("ci95_hig %.2f " 						% (ci95_hig))
-
 		print("Min agent score: %d" 				% v_min)
 		print("Max agent score: %d" 				% v_max)
 		print("Average agent score: %.2f" 			% v_avg)
 		print("ci95_low %.2f" 						% (v_ci95_low))
 		print("ci95_hig %.2f " 						% (v_ci95_hig))
 
-	print("%d,%.1f,%.2f,%d,%d,%0.2f,%0.2f,%0.2f,%d,%d,%0.2f,%0.2f,%0.2f" % 
-		(nA, accuracy_ratio,tgt,agScore_MIN,agScore_MAX,agScore_AVG,ci95_low,ci95_hig,v_min,v_max,v_avg,v_ci95_low,v_ci95_hig))
+	# print("%d,%.1f,%.2f,%d,%d,%0.2f,%0.2f,%0.2f,%d,%d,%0.2f,%0.2f,%0.2f" % 
+	# 	(nA, accuracy_ratio,tgt,agScore_MIN,agScore_MAX,agScore_AVG,ci95_low,ci95_hig,v_min,v_max,v_avg,v_ci95_low,v_ci95_hig))
+	print("%d,%.1f,%.2f,%.2f,%.2f,%d,%d,%0.2f,%0.2f,%0.2f,%d,%d,%0.2f,%0.2f,%0.2f,%0.2f" % 
+		(nA, accuracy_ratio,mean_tgt,tgt_ci95_low,tgt_ci95_hig,agScore_MIN,agScore_MAX,agScore_AVG,ci95_low,ci95_hig,v_min,v_max,v_avg,v_ci95_low,v_ci95_hig,aExTime))
 
-	if diag: print("Finished\n\n")
+	
+	# print("======================================= ")
+	# print("Agent Feature Weights")
+	# print(feat_weights)
+
+	# print("Finished\n\n")
+	# raw_input("Press Enter to close windows")
+print("======================================= ")
+print("Finished\n\n")
