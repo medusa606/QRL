@@ -1345,7 +1345,7 @@ def moveAV(gridW,gridH,AV_y):
 	AVpositionMaxtrix[[2,3,4,5],AV_y]=1
 	return AVpositionMaxtrix
 
-def MASrender(simTime, nA, agentState, score):
+def MASrender(simTime, nA, agentState, score, nExp):
 		
 	frame = env.frame.copy()
 		
@@ -1374,14 +1374,14 @@ def MASrender(simTime, nA, agentState, score):
 		
 	#======================================
 	#print score
-	text = 'Total = ' + str(int(score))
+	text = 'ACC = ' + str(int(score)) + ' / ' + str(int(nExp+1))
 	color = (0,0,255)
 	font = cv2.FONT_HERSHEY_SIMPLEX
 	y = gridH - 2
-	x =  4
+	x =  7
 	(w, h), _ = cv2.getTextSize(text, font, 1, 2)
 	x1, y1  = (int((x+0)*env.scale-w/2), int((y+1)*env.scale+h/2))
-	x2, y2  = (int((x+9)*env.scale-w/2), int((y-0.9)*env.scale+h/2))
+	x2, y2  = (int((x+12)*env.scale-w/2), int((y-0.9)*env.scale+h/2))
 	cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
 	cv2.putText(frame, text, (int((x+0.5)*env.scale-w/2), int((y+0.5)*env.scale+h/2)), font, 1, color, 2, cv2.LINE_AA)
 
@@ -1728,7 +1728,7 @@ def resetEnv(simTime,nExp,nTests,test_gen_time,done,running_score,exclusions,AV_
 	exclusions = np.empty(shape=(nA,2)) #ID, xy
 	AV_y=0
 	if display_grid:
-		MASrender(simTime, nA, agentState, validTests)
+		MASrender(simTime, nA, agentState, validTests, nExp)
 	maxT = (int)(round(gridW / vAV)+1)
 	agentState = np.empty(shape=(maxT,nA,2)) #state is [time,ID,position(x,y)]
 	# reste the timer and actors on the board
@@ -1797,12 +1797,12 @@ def plot_Qvalues(Qfig,current_qval,Qcounter):
 # ======================================================================
 # --- User Experiment Params -----------------------------------------
 
-nTests = 1000					# Number of experiements to run
+nTests = 100					# Number of experiements to run
 gridH, gridW = 12, 66			# Each grid unit is 1.5m square
 pavement_rows = [0,1,10,11] 	# grid row of each pavement
 vAV = 6 						# 6u/s ~9.1m/s ~20mph
 vPed = 1 						# 1u/s ~1.4m/s ~3mph
-nA = 3							# Number of agents
+nA = 1							# Number of agents
 delay = 0.01 					# delay between each frame, slows sim down
 vt = 1000						# points for a valid test
 AV_y = 0						# AV start position along road
@@ -1811,17 +1811,17 @@ road_pen = -5					# Penalty for being in road
 nF = 5							# number of features per agent
 
 
-display_grid  = False 			# Show the grid
+display_grid  = True 			# Show the grid
 display_chart = True 			# Show plotted data
 diag 		  = False			# What level of CL diagnostics to show
 loopAgentList = False 			# use nAlist to loop through nA
 
 plotFeatures  = False 			# plot features
-plotWeights   = True			# plot feature weights
+plotWeights   = False			# plot feature weights
 plotQvalues   = False 			# plot q-values chart
-plotAccuracy  = False 			# plot the accuracy averaged over nExp
+plotAccuracy  = True 			# plot the accuracy averaged over nExp
 SaveCharts    = True 			# save the plots produced
-display_chart_modulo = 50
+display_chart_modulo = 1
 
 # Choose the type of agent behaviour
 # 	RandAction	= take random actions
@@ -1846,6 +1846,7 @@ discount = 0.99 #future discount
 
 if loopAgentList:
 	nAList = [1,2,3,4,5,6,7,8,9,10,15,20] # Loop through list of agents
+	vtList = [50,100,200,500,700,800,900,1000,1100,1200,2000,5000,10000,20000,50000,100000,200000,500000]
 else:
 	nAList = [nA]
 
@@ -1868,6 +1869,7 @@ if plotAccuracy:
 # ======================================================================
 # --- Loop through Specified Number of Agents --------------------------
 for nA in nAList:
+# for vt in vtList:
 
 	if not(display_grid):
 		delay = 0
@@ -1990,7 +1992,7 @@ for nA in nAList:
 
 	# Display the grid lines, q-values, agent positions
 	if display_grid:
-		MASrender(simTime, nA, agentState, validTests)
+		MASrender(simTime, nA, agentState, validTests, nExp)
 	time.sleep(delay)
 
 	# Flag to indicate if a valid test has been generated
@@ -2185,7 +2187,7 @@ for nA in nAList:
 			if validTests==0:
 				acc = 0
 			else:
-				acc = 100*(validTests/nExp)			
+				acc = 100*(validTests/(nExp+1))			
 			if Acounter==1: 
 				acc_ratio_arr = acc
 				Acounter=Acounter+1
@@ -2214,7 +2216,7 @@ for nA in nAList:
 
 		# render the scene
 		if display_grid:
-			MASrender(simTime, nA, agentState, validTests)
+			MASrender(simTime, nA, agentState, validTests, nExp)
 			time.sleep(delay)		
 
 	# move AV
@@ -2442,6 +2444,6 @@ for nA in nAList:
 	# print(feat_weights)
 
 	# print("Finished\n\n")
-	# raw_input("Press Enter to close windows")
+raw_input("Press Enter to close windows")
 print("======================================= ")
 print("Finished\n\n")
