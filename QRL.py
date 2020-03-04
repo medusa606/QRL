@@ -2438,6 +2438,7 @@ for nA in nAList:
 	print("%d,%.1f,%.2f,%.2f,%.2f,%d,%d,%0.2f,%0.2f,%0.2f,%d,%d,%0.2f,%0.2f,%0.2f,%0.2f" % 
 		(nA, accuracy_ratio,mean_tgt,tgt_ci95_low,tgt_ci95_hig,agScore_MIN,agScore_MAX,agScore_AVG,ci95_low,ci95_hig,v_min,v_max,v_avg,v_ci95_low,v_ci95_hig,aExTime))
 
+
 raw_input("Press Enter to close windows")
 print("======================================= ")
 print("Finished\n\n")
