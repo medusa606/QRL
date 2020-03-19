@@ -1772,7 +1772,7 @@ def plot_Qvalues(Qfig,current_qval,Qcounter):
 # ======================================================================
 # --- User Experiment Params -----------------------------------------
 
-nTests = 1000					# Number of experiements to run
+nTests = 150					# Number of experiements to run
 gridH, gridW = 12, 66			# Each grid unit is 1.5m square
 pavement_rows = [0,1,10,11] 	# grid row of each pavement
 vAV = 6 						# 6u/s ~9.1m/s ~20mph
@@ -1797,7 +1797,7 @@ plotWeights   = False			# plot feature weights
 plotQvalues   = False 			# plot q-values chart
 plotAccuracy  = True 			# plot the accuracy averaged over nExp
 SaveCharts    = True 			# save the plots produced
-display_chart_modulo = nTests
+display_chart_modulo = (int)(nTests/10)
 
 # Choose the type of agent behaviour
 # 	RandAction	= take random actions
@@ -1813,11 +1813,20 @@ CP = True 							# Elect agents on pavement closest to the AV
 
 # Q-Learning Feature Set
 FeatSet = 1						# Choose which features agent should use
+epsilon_policy = ['fixed','linear','exponential']
+epsilon_choice = epsilon_policy[0]
 
 alpha = 0.002 #learning rate
-epsilon = 0.16 #search policy
 discount = 0.99 #future discount
-# ======================================================================
+# # ======================================================================
+# # Epsilon policy
+# if epsilon_choice == 'fixed':
+# 	epsilon = 0.16 
+# elif epsilon_choice == 'linear':
+# 	epsilon = 0.2 - (0.18*nExp/nTests)
+# elif epsilon_choice == 'exponential':
+# 	epsilon = 1/(np.sqrt(nExp))
+# # ======================================================================
 # --- Non-User Experiment Params ---------------------------------------
 
 if loopAgentList:
@@ -1891,7 +1900,6 @@ for nA in nAList:
 	nExp = 0 #experiment counter
 	random.seed(nExp) #set the random seed based on the experiment number
 	np.random.seed(nExp)
-
 
 	# ======================================================================
 	# --- MDP Agent Experiment Params --------------------------------------
@@ -1985,6 +1993,16 @@ for nA in nAList:
 		#check if series complete
 		if(nExp>nTests):
 			done=True
+
+		# ======================================================================
+		# Epsilon policy
+		if epsilon_choice == 'fixed':
+			epsilon = 0.16 
+		elif epsilon_choice == 'linear':
+			epsilon = 0.2 - (0.18*nExp/nTests)
+		elif epsilon_choice == 'exponential':
+			epsilon = 1/(np.sqrt(+1))
+		# ======================================================================
 
 		#increment time
 		if simTime==0 and diag: print("Experiment Number", nExp)
